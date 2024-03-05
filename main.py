@@ -15,7 +15,7 @@ def on_file_upload():
 
     client = OpenAI(api_key=openai_api_key)
     st.session_state["context"] = []
-    images = convert_from_bytes(uploaded_file.read(), dpi=600)
+    images = convert_from_bytes(uploaded_file.read())
     for image in images:
         buffer = BytesIO()
         # Save the image to the buffer in PNG format
