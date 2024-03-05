@@ -4,15 +4,17 @@ from openai import OpenAI
 from pdf2image import convert_from_bytes
 from io import BytesIO
 
-openai_api_key = st.secrets["api_key"]
-client = OpenAI(api_key=openai_api_key)
 
+def new_upload():
+    st.session_state["flag"] = True
 
-st.title("💬 Chatbot")
+def on_file_upload():
+    if not openai_api_key:
+        st.info("Please add your OpenAI API key to continue.")
+        st.stop()
 
-if uploaded_file := st.file_uploader(
-    "Choose files to upload: ", accept_multiple_files=False
-):
+    client = OpenAI(api_key=openai_api_key)
+    st.session_state["context"] = []
     images = convert_from_bytes(uploaded_file.read())
     for image in images:
         buffer = BytesIO()
@@ -43,8 +45,34 @@ if uploaded_file := st.file_uploader(
             max_tokens=4096,
         )
         msg = response.choices[0].message.content
-        st.session_state.messages.append({"role": "assistant", "content": msg})
-        st.chat_message("assistant").write(msg)
+        st.session_state.context.append({"role": "system", "content": msg})
+        st.session_state["flag"] = False
+
+
+if "context" not in st.session_state:
+    st.session_state["context"] = []
+
+with st.sidebar:
+    openai_api_key = st.text_input("OpenAI API Key", key="chatbot_api_key", type="password")
+    if st.button("Clear Chat History"):
+        st.session_state.messages = []
+        st.session_state.context = []
+
+    if uploaded_file := st.file_uploader(
+        "Choose a file to upload: ",
+        accept_multiple_files=False,
+        on_change=new_upload,
+    ):
+        if st.session_state["flag"] and uploaded_file: 
+            on_file_upload()
+
+    for i, page in enumerate(st.session_state.context):
+        st.write(
+            "-----------------------------------------------------------------------------------------------"
+        )
+        st.write(f"Page {i + 1}: " + page['content'])
+
+st.title("💬 Chatbot")
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = [
@@ -59,11 +87,12 @@ if prompt := st.chat_input():
         st.info("Please add your OpenAI API key to continue.")
         st.stop()
 
+    client = OpenAI(api_key=openai_api_key)
     st.session_state.messages.append({"role": "user", "content": prompt})
     st.chat_message("user").write(prompt)
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo", messages=st.session_state.messages
-    )
+    messages = st.session_state.context.copy()
+    messages.extend(st.session_state.messages[-10:])
+    response = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages)
     msg = response.choices[0].message.content
     st.session_state.messages.append({"role": "assistant", "content": msg})
     st.chat_message("assistant").write(msg)
