@@ -2,41 +2,49 @@ import streamlit as st
 import base64
 from openai import OpenAI
 from pdf2image import convert_from_bytes
+from io import BytesIO
 
 openai_api_key = st.secrets["api_key"]
 client = OpenAI(api_key=openai_api_key)
 
-with st.sidebar:
-    uploaded_file = st.file_uploader(
-        "Choose files to upload: ", accept_multiple_files=False
-    )
-    if uploaded_file:
-        images = convert_from_bytes(uploaded_file.read())
-        content = [{"type": "text", "text": "Print all the texts in the images."}]
-        for image in images:
-            content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{base64.b64encode(image.tobytes())}"
-                    },
-                }
-            )
+
+st.title("💬 Chatbot")
+
+if uploaded_file := st.file_uploader(
+    "Choose files to upload: ", accept_multiple_files=False
+):
+    images = convert_from_bytes(uploaded_file.read())
+    for image in images:
+        buffer = BytesIO()
+        # Save the image to the buffer in PNG format
+        image.save(buffer, format="PNG")
+        # Retrieve the byte data from the buffer
+        byte_data = buffer.getvalue()
+        # Encode this byte data to Base64
+        b64_image = base64.b64encode(byte_data).decode("utf-8")
+
         response = client.chat.completions.create(
             model="gpt-4-vision-preview",
             messages=[
                 {
                     "role": "user",
-                    "content": content,
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Transcribe all the texts in the image. Only respond with the texts.",
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{b64_image}"},
+                        },
+                    ],
                 }
             ],
-            max_tokens=100000,
+            max_tokens=4096,
         )
         msg = response.choices[0].message.content
         st.session_state.messages.append({"role": "assistant", "content": msg})
         st.chat_message("assistant").write(msg)
-
-st.title("💬 Chatbot")
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = [
