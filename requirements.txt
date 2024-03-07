@@ -2,3 +2,4 @@ streamlit
 openai
 pdf2image
 Pillow
+pypdf2
